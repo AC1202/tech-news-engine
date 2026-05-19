@@ -1,0 +1,35 @@
+name: Daily Tech News
+
+on:
+  schedule:
+    - cron: "0 17 * * *"   # 13:00 ET (UTC-4 夏令) / 17:00 UTC
+  workflow_dispatch:         # 允許手動從 GitHub 網頁觸發，方便測試
+
+jobs:
+  run-news-engine:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15      # 超過 15 分鐘強制中止，避免卡住燒 Actions 分鐘數
+
+    steps:
+      # 1. 把 repo 的程式碼下載到 runner 機器上
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      # 2. 裝 Python 3.11
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"       # 快取 pip 套件，加快後續執行速度
+
+      # 3. 安裝 requirements.txt 裡列出的套件
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      # 4. 執行主程式，把三個 secrets 注入為環境變數
+      - name: Run news engine
+        env:
+          ANTHROPIC_API_KEY:  ${{ secrets.ANTHROPIC_API_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID:   ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python main.py
