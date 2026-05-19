@@ -2,7 +2,7 @@
 """
 Daily US Tech News Engine — v3.4
 PRD Owner: Alvin Chen
-Schedule: 13:00 ET daily via GitHub Actions (cron: 0 17 * * *)
+Schedule: 13:00 ET daily via cron-job.org → workflow_dispatch
 """
 
 import os

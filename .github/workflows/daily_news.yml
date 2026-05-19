@@ -1,9 +1,7 @@
 name: Daily Tech News
 
 on:
-  schedule:
-    - cron: "0 17 * * *"   # 13:00 ET (UTC-4 夏令) / 17:00 UTC
-  workflow_dispatch:         # 允許手動從 GitHub 網頁觸發，方便測試
+  workflow_dispatch:         # 由 cron-job.org 在 17:00 UTC (13:00 EDT) 觸發
 
 jobs:
   run-news-engine:
