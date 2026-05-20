@@ -27,17 +27,16 @@ log = logging.getLogger(__name__)
 # Config
 # ─────────────────────────────────────────────────────────────
 SOURCES = [
-    {"name": "The Athletic",          "url": "https://theathletic.com/rss/",                       "W_site": 94},
-    {"name": "The Ringer",            "url": "https://www.theringer.com/rss/index.xml",             "W_site": 92},
-    {"name": "ESPN",                  "url": "https://www.espn.com/espn/rss/news",                  "W_site": 92},
-    {"name": "Sports Illustrated",    "url": "https://www.si.com/rss/si_topstories.rss",            "W_site": 86},
-    {"name": "NBA.com",               "url": "https://www.nba.com/news/rss.xml",                    "W_site": 86},
-    {"name": "Yahoo Sports",          "url": "https://sports.yahoo.com/rss/",                       "W_site": 85},
-    {"name": "NBC ProBasketballTalk", "url": "https://nba.nbcsports.com/feed/",                     "W_site": 84},
-    {"name": "Reuters Sports",        "url": "https://feeds.reuters.com/reuters/sportsNews",         "W_site": 84},
-    {"name": "CBS Sports",            "url": "https://www.cbssports.com/rss/headlines/",            "W_site": 82},
-    {"name": "Bleacher Report",       "url": "https://bleacherreport.com/articles/feed",            "W_site": 78},
-    {"name": "Fox Sports",            "url": "https://api.foxsports.com/v1/rss?uri=sports",         "W_site": 78},
+    {"name": "ESPN",           "url": "https://www.espn.com/espn/rss/news",                                                         "W_site": 92},
+    {"name": "ESPN NBA",       "url": "https://www.espn.com/espn/rss/nba/news",                                                     "W_site": 92},
+    {"name": "ESPN MLB",       "url": "https://www.espn.com/espn/rss/mlb/news",                                                     "W_site": 88},
+    {"name": "ESPN NFL",       "url": "https://www.espn.com/espn/rss/nfl/news",                                                     "W_site": 85},
+    {"name": "Yahoo Sports",   "url": "https://sports.yahoo.com/rss/",                                                              "W_site": 85},
+    {"name": "CBS Sports",     "url": "https://www.cbssports.com/rss/headlines/",                                                   "W_site": 82},
+    {"name": "GNews NBA",      "url": "https://news.google.com/rss/search?q=NBA&hl=en-US&gl=US&ceid=US:en",                         "W_site": 85},
+    {"name": "GNews MLB",      "url": "https://news.google.com/rss/search?q=MLB+baseball&hl=en-US&gl=US&ceid=US:en",               "W_site": 83},
+    {"name": "GNews NFL",      "url": "https://news.google.com/rss/search?q=NFL+football&hl=en-US&gl=US&ceid=US:en",               "W_site": 83},
+    {"name": "GNews NHL",      "url": "https://news.google.com/rss/search?q=NHL+hockey&hl=en-US&gl=US&ceid=US:en",                 "W_site": 83},
 ]
 
 REDDIT_NBA_URL = "https://www.reddit.com/r/nba/hot.json?limit=100"
@@ -125,7 +124,7 @@ STORY_TYPE_PATTERNS = [
 QUALITY_FLOOR     = 75
 MAX_STORIES       = 5
 WINDOW_HOURS      = 48
-CLUSTER_THRESHOLD = 0.70
+CLUSTER_THRESHOLD = 0.50
 MAX_PER_SPORT     = 2
 SLOW_NEWS_TAG     = "📭 Quiet sports day."
 HISTORY_FILE      = Path(__file__).parent / "sports_history.json"
@@ -227,9 +226,9 @@ def rnba_score(item: dict, rnba_ranks: dict) -> int:
 # ─────────────────────────────────────────────────────────────
 def w_fresh(published_at: datetime) -> int:
     age_h = (datetime.now(timezone.utc) - published_at).total_seconds() / 3600
-    if age_h < 8:  return 100
-    if age_h < 24: return 90
-    return 70
+    if age_h < 12: return 100
+    if age_h < 24: return 95
+    return 80
 
 
 def w_rank(item: dict, rnba_ranks: dict, use_rnba: bool) -> float:
@@ -444,13 +443,12 @@ def translate_headline(en_title: str) -> str:
 
 def generate_en_summary(title: str, raw: str) -> str:
     return haiku(
-        f"Write a 60–80 word English summary of this US sports story. "
-        f"Capture what happened, who's involved, and why it matters for American sports culture. "
-        f"Be specific. No filler phrases.\n\n"
+        f"Write a 30–40 word English summary of this US sports story. "
+        f"One sentence: what happened, who's involved, why it matters. No filler.\n\n"
         f"Title: {title}\n"
-        f"Context: {raw[:600]}\n\n"
+        f"Context: {raw[:400]}\n\n"
         f"Output: summary only.",
-        max_tokens=200,
+        max_tokens=100,
     )
 
 
@@ -461,7 +459,7 @@ def translate_summary(en_summary: str) -> str:
         f"and dollar amounts in English.\n\n"
         f"{en_summary}\n\n"
         f"Output: zh-TW translation only.",
-        max_tokens=300,
+        max_tokens=120,
     )
 
 
