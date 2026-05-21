@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Daily US Tech News Engine — v3.4
+Daily US Tech News Engine — v3.5
 PRD Owner: Alvin Chen
 Schedule: 13:00 ET daily via cron-job.org → workflow_dispatch
 """
@@ -39,7 +39,7 @@ SOURCES = [
     {"name": "PYMNTS",          "url": "https://www.pymnts.com/feed/",                    "W_site": 90},
     {"name": "VentureBeat",     "url": "https://venturebeat.com/feed/",                   "W_site": 90},
     {"name": "The Verge",       "url": "https://www.theverge.com/rss/index.xml",          "W_site": 88},
-    {"name": "Ars Technica",    "url": "https://feeds.arstechnica.com/arstechnica/index", "W_site": 86},
+    {"name": "Ars Technica",    "url": "https://feeds.arstechnica.com/arstechnica/index", "W_site": 68},
     {"name": "Retail Dive",     "url": "https://www.retaildive.com/feeds/news/",          "W_site": 86},
     {"name": "MIT Tech Review", "url": "https://www.technologyreview.com/feed/",          "W_site": 85},
     {"name": "Rest of World",   "url": "https://restofworld.org/feed/",                   "W_site": 85},
@@ -74,7 +74,17 @@ ENTITY_TIERS = {
     },
     "anti": {
         "multiplier": 0.85,
-        "keywords": ["gaming hardware", "consumer electronics review", "automotive", "esports"],
+        "keywords": [
+            # hardware / gadget reviews
+            "gaming hardware", "consumer electronics review", "gadget review",
+            "headphones review", "hardware review", "game review",
+            # entertainment / culture
+            "movie review", "film review", "box office", "celebrity",
+            "music video", "album review", "award show", "oscars", "grammy", "emmys",
+            "turns 40", "turns 50", "turns 30", "anniversary",
+            # off-topic
+            "automotive", "esports", "recipe", "travel guide",
+        ],
     },
 }
 
@@ -86,7 +96,6 @@ INFO_GAIN_KEYWORDS = [
 
 SCARCITY = {
     "The Information": {"multiplier": 1.35, "additive": 15, "constraint": "always"},
-    "Ars Technica":    {"multiplier": 1.25, "additive": 10, "constraint": "always"},
     "TechCrunch":      {"multiplier": 1.15, "additive":  8, "constraint": "tier_1_2"},
 }
 
@@ -353,9 +362,46 @@ def haiku(prompt: str, max_tokens: int = 300) -> str:
     msg = haiku_client.messages.create(
         model="claude-haiku-4-5-20251001",
         max_tokens=max_tokens,
+        temperature=0.1,
         messages=[{"role": "user", "content": prompt}],
     )
     return msg.content[0].text.strip()
+
+
+def relevance_score(title: str, raw: str) -> int:
+    """Ask Haiku to score tech relevance 1-10. Returns integer."""
+    try:
+        result = haiku(
+            f"Rate relevance to a tech news reader interested in: AI, software, startups, "
+            f"funding rounds, e-commerce, payments, fintech, digital platforms, tech policy.\n\n"
+            f"10 = Core tech business (AI launch, funding, M&A, payments news)\n"
+            f"7-9 = Relevant tech (company strategy, digital trends, regulation)\n"
+            f"4-6 = Borderline (general business with tech angle)\n"
+            f"1-3 = Not relevant (entertainment, sports, culture, gadget review, lifestyle)\n\n"
+            f"Title: {title}\n"
+            f"Context: {raw[:200]}\n\n"
+            f"Output: single integer 1-10 only.",
+            max_tokens=5,
+        )
+        return int(result.strip())
+    except Exception:
+        return 5  # neutral fallback
+
+
+def filter_by_relevance(items: list, top_n: int = 25) -> list:
+    """Run Haiku relevance check on top_n candidates. Drop score < 5."""
+    candidates = sorted(items, key=lambda x: -x["score"])[:top_n]
+    rest       = items[top_n:]  # below top_n → pass through without extra call
+    checked    = []
+    for item in candidates:
+        r = relevance_score(item["title"], item.get("summary_raw", ""))
+        item["relevance"] = r
+        if r >= 5:
+            checked.append(item)
+        else:
+            log.info(f"  ✂️ Relevance {r}/10 → dropped: {item['title'][:60]}")
+    log.info(f"Relevance filter (top {top_n}): {len(candidates)} → {len(checked)}")
+    return checked + rest
 
 
 def translate_headline(en_title: str) -> str:
@@ -372,13 +418,13 @@ def translate_headline(en_title: str) -> str:
 
 def generate_en_summary(title: str, raw: str) -> str:
     return haiku(
-        f"Write a 60–80 word English summary of this news story. "
-        f"Capture what changed and why it matters to a senior PM in e-commerce, "
-        f"payments, or digital retail. Be specific. No filler phrases.\n\n"
+        f"Write a 40–55 word factual English summary of this news story. "
+        f"State what happened, who is involved, and the key outcome. "
+        f"No opinion, no analysis, no 'this matters because'. Facts only.\n\n"
         f"Title: {title}\n"
-        f"Context: {raw[:600]}\n\n"
+        f"Context: {raw[:400]}\n\n"
         f"Output: summary only.",
-        max_tokens=200,
+        max_tokens=120,
     )
 
 
@@ -451,7 +497,7 @@ def send_telegram(text: str, retries: int = 3) -> bool:
 # Main
 # ─────────────────────────────────────────────────────────────
 def main():
-    log.info("=== Daily Tech News Engine v3.4 starting ===")
+    log.info("=== Daily Tech News Engine v3.5 starting ===")
 
     raw = fetch_all_sources()           # Step 1
     raw = filter_by_age(raw)            # Step 2
@@ -464,6 +510,7 @@ def main():
     raw = score_all(raw, memo_ranks, use_memo)  # Step 5b (scoring)
     raw.sort(key=lambda x: -x["score"])
 
+    raw   = filter_by_relevance(raw)    # Step 5c (Haiku relevance pre-filter)
     raw   = cluster_and_dedup(raw)      # Step 6
     raw   = apply_quality_floor(raw)    # Step 7a
     raw   = apply_diversity(raw)        # Step 7b
