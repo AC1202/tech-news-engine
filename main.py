@@ -418,12 +418,15 @@ def translate_headline(en_title: str) -> str:
 
 def generate_en_summary(title: str, raw: str) -> str:
     return haiku(
-        f"Write a 40–55 word factual English summary of this news story. "
-        f"State what happened, who is involved, and the key outcome. "
-        f"No opinion, no analysis, no 'this matters because'. Facts only.\n\n"
+        f"Summarize the article in 40–55 words.\n"
+        f"Rules:\n"
+        f"- Use ONLY facts stated in the title and context below\n"
+        f"- Do NOT add analysis, implications, opinions, or any information not in the source\n"
+        f"- Do NOT write 'this shows', 'this means', 'this matters because', or any inference\n"
+        f"- Third-person, neutral, past/present tense\n\n"
         f"Title: {title}\n"
         f"Context: {raw[:400]}\n\n"
-        f"Output: summary only.",
+        f"Output: factual summary only.",
         max_tokens=120,
     )
 
