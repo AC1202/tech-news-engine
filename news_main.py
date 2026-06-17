@@ -124,7 +124,7 @@ INTL_SLOTS        = 3
 QUALITY_FLOOR     = 65
 QUALITY_FALLBACK  = 55
 DC_MIN_SCORE      = 65
-CLUSTER_THRESHOLD = 0.65
+CLUSTER_THRESHOLD = 0.50
 HISTORY_DAYS      = 2
 HISTORY_FILE      = Path(__file__).parent / "news_history.json"
 
