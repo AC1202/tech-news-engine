@@ -7,6 +7,7 @@ Schedule: 09:00 ET daily via cron-job.org → workflow_dispatch
 
 import os
 import re
+import sys
 import json
 import time
 import logging
@@ -597,8 +598,12 @@ def main():
     log.info(f"Final — US: {len(us_final)}, INTL: {len(intl_final)}")
 
     if not us_final and not intl_final:
-        send_telegram("📭 No stories passed the quality floor today.")
+        if not send_telegram("📭 No stories passed the quality floor today."):
+            log.error("❌ Failed to send 'no stories' notice")
+            sys.exit(1)
         return
+
+    failed = 0
 
     # Send US stories
     for rank, item in enumerate(us_final, 1):
@@ -606,8 +611,11 @@ def main():
         try:
             ok = send_telegram(format_story(item, "us", rank))
             log.info(f"  {'✅' if ok else '❌'} US #{rank}")
+            if not ok:
+                failed += 1
         except Exception as e:
             log.error(f"  ❌ US #{rank}: {e}")
+            failed += 1
         time.sleep(2)
 
     if dc_slow:
@@ -619,12 +627,21 @@ def main():
         try:
             ok = send_telegram(format_story(item, "intl", rank))
             log.info(f"  {'✅' if ok else '❌'} INTL #{rank}")
+            if not ok:
+                failed += 1
         except Exception as e:
             log.error(f"  ❌ INTL #{rank}: {e}")
+            failed += 1
         time.sleep(2)
 
     all_titles = [i["title"] for i in us_final + intl_final]
     save_history(history, all_titles)
+
+    # history 先存好再 exit 1 → workflow 亮紅燈並觸發 email 通知
+    if failed:
+        log.error(f"❌ {failed}/{len(us_final) + len(intl_final)} stories failed to send")
+        sys.exit(1)
+
     log.info("=== Done ===")
 
 

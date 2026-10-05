@@ -7,6 +7,7 @@ Schedule: 13:00 ET daily via cron-job.org → workflow_dispatch
 
 import os
 import re
+import sys
 import time
 import logging
 from datetime import datetime, timezone, timedelta
@@ -362,7 +363,8 @@ def haiku(prompt: str, max_tokens: int = 300) -> str:
     msg = haiku_client.messages.create(
         model="claude-haiku-4-5-20251001",
         max_tokens=max_tokens,
-        temperature=0.1,
+        # anthropic SDK 1.x 移除了 temperature kwarg（傳了會 TypeError）；Haiku 4.5 API 仍接受，改走 extra_body
+        extra_body={"temperature": 0.1},
         messages=[{"role": "user", "content": prompt}],
     )
     return msg.content[0].text.strip()
@@ -522,21 +524,32 @@ def main():
     log.info(f"Stories to deliver: {len(final)}")
 
     if not final:
-        send_telegram("📭 No stories passed the quality floor today.")
+        if not send_telegram("📭 No stories passed the quality floor today."):
+            log.error("❌ Failed to send 'no stories' notice")
+            sys.exit(1)
         return
 
+    failed = 0
     for rank, item in enumerate(final, 1):
         log.info(f"Sending #{rank}: {item['title'][:70]}")
         try:
             message = format_story(rank, item)
             ok = send_telegram(message)
             log.info(f"  {'✅' if ok else '❌'} #{rank}")
+            if not ok:
+                failed += 1
         except Exception as e:
             log.error(f"  ❌ Error on #{rank}: {e}")
+            failed += 1
         time.sleep(2)  # brief pause between messages
 
     if len(final) < 3:
         send_telegram(SLOW_NEWS_TAG)
+
+    # 任何一則失敗就 exit 1 → workflow 亮紅燈並觸發 email 通知
+    if failed:
+        log.error(f"❌ {failed}/{len(final)} stories failed to send")
+        sys.exit(1)
 
     log.info("=== Done ===")
 

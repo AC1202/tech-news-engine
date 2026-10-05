@@ -22,19 +22,40 @@ jobs:
           cache: "pip"
 
       - name: Install dependencies
-        run: pip install -r requirements.txt
+        id: install
+        shell: bash
+        run: pip install -r requirements.txt 2>&1 | tee run.log   # 失敗時 email 會帶 pip 錯誤
 
+      # 輸出同時寫進 run.log，失敗時給 email 抓原因（shell: bash 才有 pipefail）
       - name: Run news engine
+        id: run
+        shell: bash
         env:
           ANTHROPIC_API_KEY:  ${{ secrets.ANTHROPIC_API_KEY }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID:   ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: python news_main.py
+        run: python news_main.py 2>&1 | tee run.log
 
       - name: Commit history
+        id: commit
+        if: ${{ !cancelled() && (steps.run.outcome == 'success' || steps.run.outcome == 'failure') }}  # 部分失敗也要存 history
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add news_history.json
           git diff --staged --quiet || git commit -m "chore: update news history [skip ci]"
           git push
+
+      # 任何步驟失敗 → 寄 email 通知（引擎、時間、失敗原因）
+      - name: Email on failure
+        if: failure()
+        env:
+          SMTP_USER:         ${{ secrets.SMTP_USER }}
+          SMTP_APP_PASSWORD: ${{ secrets.SMTP_APP_PASSWORD }}
+          NOTIFY_EMAIL_TO:   ${{ secrets.NOTIFY_EMAIL_TO }}
+          RUN_URL:           ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          STEP_OUTCOMES: >-
+            install=${{ steps.install.outcome }}
+            run=${{ steps.run.outcome }}
+            commit=${{ steps.commit.outcome }}
+        run: python3 notify_failure.py "US General News" run.log
